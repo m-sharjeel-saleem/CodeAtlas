@@ -17,11 +17,12 @@
 | | |
 |---|---|
 | **Stage** | Active development |
-| **Backend** | ✅ Multi-agent graph (router → retriever → parallel reviewers → critic), guardrails, tests passing |
+| **Backend** | ✅ Real pipeline: GitHub ingest → chunk → embed → pgvector → hybrid RAG → multi-agent review → critic, with cost tracking, guardrails, and SSE streaming |
 | **Frontend** | ✅ Production UI (chat, animated agent pipeline, findings, trace dashboard), build verified |
-| **In progress** | Real ingest + RAG (GitHub fetch → chunk → embed → pgvector), live Gemini calls, SSE streaming, evals |
+| **Runs keyless** | ✅ Degrades gracefully with no keys/DB so the app runs for demos; turns fully live when you add a Gemini key + Supabase |
+| **Next** | Evals dashboard, human-in-the-loop "open a PR" via MCP, deploy |
 
-This repository is a working foundation: the agent orchestration, safety layer, API, and full UI are built and verified. The LLM-backed steps currently return structured placeholders so the system runs end-to-end before keys are wired — the next milestone replaces them with real Gemini-powered retrieval and review.
+The full pipeline is implemented and verified end-to-end (13 passing tests; real GitHub fetch confirmed). Every external dependency degrades gracefully: with no Gemini key the answers are clearly stubbed, with no database retrieval returns empty — so the system always runs. Add valid keys and the same code paths make real calls.
 
 ---
 
@@ -115,11 +116,12 @@ npm run dev                    # → http://localhost:3000
 ## 🗺️ Roadmap
 
 - [x] Multi-agent LangGraph orchestration (router → retriever → reviewers → critic)
-- [x] Safety guardrails + cost-cap enforcement + smoke tests
+- [x] Safety guardrails + cost-cap enforcement + tests (13 passing)
 - [x] Production frontend (chat, agent pipeline, findings, trace dashboard)
-- [ ] Real ingest: GitHub fetch → chunk → embed into pgvector
-- [ ] Live Gemini RAG chat with SSE streaming
-- [ ] Structured agentic review with critic verification on real code
+- [x] Real ingest: GitHub fetch → chunk → embed into pgvector
+- [x] Live Gemini RAG chat with SSE streaming
+- [x] Structured agentic review with critic verification on real code
+- [x] Graceful keyless degradation for demos
 - [ ] Evals dashboard (retrieval relevance + review precision/recall)
 - [ ] Human-in-the-loop "open a PR" via GitHub MCP
 - [ ] Deploy (Vercel + Render/Railway)

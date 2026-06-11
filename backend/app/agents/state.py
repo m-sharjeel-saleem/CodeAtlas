@@ -39,6 +39,7 @@ class AgentState(TypedDict, total=False):
     answer: str
     architecture: str
     findings: Annotated[list[Finding], add]     # reducer: reviewers append concurrently
+    verified_findings: list[Finding]            # overwrite: critic's confirmed subset
 
     # Observability — accumulated across the run
     cost_usd: Annotated[float, add]
