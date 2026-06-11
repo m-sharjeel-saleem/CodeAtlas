@@ -1,0 +1,35 @@
+# Render Blueprint — one-click deploy of the CodeAtlas backend (free tier).
+# In Render: New + → Blueprint → connect this repo → fill the sync:false secrets.
+services:
+  - type: web
+    name: codeatlas-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: MODEL_REASONING
+        value: gemini-2.5-pro
+      - key: MODEL_FAST
+        value: gemini-2.5-flash
+      - key: EMBEDDING_MODEL
+        value: gemini-embedding-001
+      - key: SESSION_COST_CAP_USD
+        value: "1.00"
+      - key: MAX_FILES_PER_REPO
+        value: "150"   # bounded for the 512MB free tier; raise on a paid plan
+      # --- secrets: set these in the Render dashboard (not committed) ---
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false

@@ -1,6 +1,8 @@
 "use client";
 
 import { MessageSquareText, Sparkles } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -38,9 +40,9 @@ export function ChatPanel({ answer, architecture, loading }: Props) {
         {loading ? (
           <Shimmer />
         ) : content ? (
-          <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-zinc-200">
-            {content}
-          </p>
+          <div className="prose prose-invert prose-sm max-w-none prose-pre:bg-black/40 prose-pre:border prose-pre:border-border prose-code:text-accent-soft prose-code:before:content-none prose-code:after:content-none prose-headings:text-zinc-100 prose-a:text-accent-soft">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+          </div>
         ) : (
           <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-zinc-500">
             <Sparkles className="h-5 w-5 text-zinc-600" />

@@ -15,7 +15,6 @@ redis==5.2.1
 
 # --- Integrations ---
 httpx==0.28.1
-tenacity==9.0.0
 
 # --- Dev / tests ---
 pytest==8.3.4
