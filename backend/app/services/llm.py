@@ -5,6 +5,7 @@ gracefully: with no GEMINI_API_KEY, `complete()` returns a clear stub and
 `embed()` returns None, so the whole app runs keyless for demos. With a key it
 makes real calls and reports token usage + cost.
 """
+import time
 from dataclasses import dataclass
 
 import httpx
@@ -12,6 +13,28 @@ import httpx
 from app.config import get_settings
 
 _BASE = "https://generativelanguage.googleapis.com/v1beta"
+_RETRY_STATUS = {429, 500, 502, 503, 504}
+_MAX_ATTEMPTS = 4
+
+
+def _request(path: str, key: str, body: dict) -> dict:
+    """POST to the Gemini API with the key in a header (never the URL, so it
+    can't leak into logs/errors) and exponential backoff on transient errors."""
+    headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
+    last: Exception | None = None
+    for attempt in range(_MAX_ATTEMPTS):
+        try:
+            r = httpx.post(f"{_BASE}/{path}", headers=headers, json=body, timeout=90)
+            if r.status_code in _RETRY_STATUS:
+                last = httpx.HTTPStatusError(f"transient {r.status_code}", request=r.request, response=r)
+            else:
+                r.raise_for_status()
+                return r.json()
+        except (httpx.TransportError, httpx.HTTPStatusError) as e:
+            last = e
+        if attempt < _MAX_ATTEMPTS - 1:
+            time.sleep(1.5 ** attempt)  # 1s, 1.5s, 2.25s
+    raise RuntimeError(f"Gemini request failed after {_MAX_ATTEMPTS} attempts: {last}")
 
 # Approximate per-million-token USD pricing for the cost dashboard (estimate only).
 _PRICING = {
@@ -53,10 +76,7 @@ def _generate(system: str, prompt: str, model: str, json_mode: bool) -> LLMResul
     }
     if json_mode:
         body["generationConfig"] = {"response_mime_type": "application/json"}
-    r = httpx.post(f"{_BASE}/models/{model}:generateContent",
-                   params={"key": key}, json=body, timeout=90)
-    r.raise_for_status()
-    data = r.json()
+    data = _request(f"models/{model}:generateContent", key, body)
     try:
         text = data["candidates"][0]["content"]["parts"][0]["text"]
     except (KeyError, IndexError):
@@ -105,8 +125,6 @@ def embed(texts: list[str], *, task_type: str = "retrieval_document") -> list[li
                 for t in batch
             ]
         }
-        r = httpx.post(f"{_BASE}/models/{model}:batchEmbedContents",
-                       params={"key": key}, json=body, timeout=90)
-        r.raise_for_status()
-        out.extend(e["values"] for e in r.json().get("embeddings", []))
+        data = _request(f"models/{model}:batchEmbedContents", key, body)
+        out.extend(e["values"] for e in data.get("embeddings", []))
     return out

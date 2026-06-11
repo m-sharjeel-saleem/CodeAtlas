@@ -1,4 +1,4 @@
-import type { AnalyzeResponse } from "./types";
+import type { AnalyzeResponse, IngestResponse } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -32,7 +32,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 }
 
 export const api = {
-  ingest: (repo: string) => post<{ repo: string; status: string }>("/api/ingest", { repo }),
+  ingest: (repo: string) => post<IngestResponse>("/api/ingest", { repo }),
   analyze: (repo: string, question: string) =>
     post<AnalyzeResponse>("/api/analyze", { repo, question }),
 };

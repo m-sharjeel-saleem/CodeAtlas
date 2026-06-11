@@ -21,6 +21,15 @@ export interface RunTrace {
   tokens_out: number;
 }
 
+export interface IngestResponse {
+  repo: string;
+  files_indexed: number;
+  chunks: number;
+  embedded: boolean;
+  persisted: boolean;
+  error: string | null;
+}
+
 export interface AnalyzeResponse {
   repo: string;
   intent: Intent;
