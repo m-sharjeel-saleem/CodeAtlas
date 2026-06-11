@@ -14,7 +14,7 @@ _LENSES = {
 
 def _review(state: AgentState, lens: str) -> dict:
     chunks = state.get("chunks", [])
-    # TODO: prompt Claude with the lens-specific rubric over the delimited chunks
+    # TODO: prompt the LLM with the lens-specific rubric over the delimited chunks
     # and parse structured Finding[] (tool-call / JSON schema). Placeholder below.
     findings: list[Finding] = []
     return {

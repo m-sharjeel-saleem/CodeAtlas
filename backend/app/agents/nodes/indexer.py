@@ -13,7 +13,7 @@ def responder_node(state: AgentState) -> dict:
     # Untrusted repo content is delimited before it ever reaches a prompt.
     _context = "\n\n".join(wrap_untrusted(c["content"]) for c in chunks)
 
-    # TODO: call Claude with the question + delimited context; stream tokens out;
+    # TODO: call the LLM with the question + delimited context; stream tokens out;
     # record real cost/tokens. For now, a placeholder keeps the graph runnable.
     answer = (
         f"[placeholder] Would answer '{state.get('question')}' for "

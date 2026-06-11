@@ -11,10 +11,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    # LLM
-    anthropic_api_key: str = ""
-    model_reasoning: str = "claude-opus-4-8"
-    model_fast: str = "claude-sonnet-4-6"
+    # LLM (Google Gemini)
+    gemini_api_key: str = ""
+    model_reasoning: str = "gemini-2.5-pro"
+    model_fast: str = "gemini-2.5-flash"
+    embedding_model: str = "text-embedding-004"
 
     # GitHub
     github_token: str = ""

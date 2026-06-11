@@ -9,7 +9,7 @@ from app.agents.state import AgentState
 
 def critic_node(state: AgentState) -> dict:
     findings = state.get("findings", [])
-    # TODO: for each finding, ask Claude to confirm/refute it strictly against the
+    # TODO: for each finding, ask the LLM to confirm/refute it strictly against the
     # cited chunk; set verified accordingly. Placeholder marks none yet verified.
     verified = [f for f in findings if f.get("verified")]
     return {
