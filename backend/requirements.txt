@@ -5,11 +5,8 @@ pydantic==2.10.3
 pydantic-settings==2.6.1
 sse-starlette==2.1.3
 
-# --- Agents / LLM (Google Gemini) ---
+# --- Agents / LLM (Google Gemini via REST + httpx) ---
 langgraph==0.2.53
-langchain==0.3.10
-langchain-google-genai==2.0.7
-google-generativeai==0.8.3
 
 # --- Data / retrieval ---
 psycopg[binary]==3.2.3

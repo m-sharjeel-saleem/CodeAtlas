@@ -1,12 +1,17 @@
-"""Google Gemini wrapper — text generation + embeddings.
+"""Google Gemini wrapper — text generation + embeddings over the REST API.
 
-Designed to degrade gracefully: with no GEMINI_API_KEY set, `complete()` returns
-a clear stub (so the whole app runs keyless for UI/demo) and `embed()` returns
-None. With a key, it makes real Gemini calls and reports token usage + cost.
+Uses httpx directly (no SDK) against the Generative Language API. Degrades
+gracefully: with no GEMINI_API_KEY, `complete()` returns a clear stub and
+`embed()` returns None, so the whole app runs keyless for demos. With a key it
+makes real calls and reports token usage + cost.
 """
 from dataclasses import dataclass
 
+import httpx
+
 from app.config import get_settings
+
+_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
 # Approximate per-million-token USD pricing for the cost dashboard (estimate only).
 _PRICING = {
@@ -14,7 +19,7 @@ _PRICING = {
     "gemini-2.5-flash": {"in": 0.30, "out": 2.50},
 }
 
-EMBED_DIM = 768  # text-embedding-004
+EMBED_DIM = 768  # requested output dimensionality for gemini-embedding-001
 
 
 @dataclass
@@ -31,81 +36,77 @@ def estimate_cost_usd(model: str, tokens_in: int, tokens_out: int) -> float:
     return (tokens_in / 1_000_000) * p["in"] + (tokens_out / 1_000_000) * p["out"]
 
 
-def _configured():
-    settings = get_settings()
-    if not settings.gemini_api_key:
-        return None
-    try:
-        import google.generativeai as genai
+def _key() -> str | None:
+    k = get_settings().gemini_api_key
+    return k if k and not k.startswith("AIzaSyxxxx") else None
 
-        genai.configure(api_key=settings.gemini_api_key)
-        return genai
-    except Exception:
-        return None
+
+def _generate(system: str, prompt: str, model: str, json_mode: bool) -> LLMResult:
+    key = _key()
+    if not key:
+        return LLMResult(text="[]" if json_mode else
+                         "[CodeAtlas is running without a Gemini key — set GEMINI_API_KEY "
+                         "to get a real, grounded answer here.]", stub=True)
+    body: dict = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "systemInstruction": {"parts": [{"text": system}]},
+    }
+    if json_mode:
+        body["generationConfig"] = {"response_mime_type": "application/json"}
+    r = httpx.post(f"{_BASE}/models/{model}:generateContent",
+                   params={"key": key}, json=body, timeout=90)
+    r.raise_for_status()
+    data = r.json()
+    try:
+        text = data["candidates"][0]["content"]["parts"][0]["text"]
+    except (KeyError, IndexError):
+        text = ""
+    usage = data.get("usageMetadata", {})
+    tin = usage.get("promptTokenCount", 0)
+    tout = usage.get("candidatesTokenCount", 0)
+    return LLMResult(text=text, tokens_in=tin, tokens_out=tout,
+                     cost_usd=estimate_cost_usd(model, tin, tout))
 
 
 def complete(system: str, prompt: str, *, model: str | None = None) -> LLMResult:
-    """Single-shot completion. Returns a stub result if Gemini is not configured."""
-    settings = get_settings()
-    model = model or settings.model_fast
-    genai = _configured()
-    if genai is None:
-        return LLMResult(
-            text="[CodeAtlas is running without a Gemini key — set GEMINI_API_KEY to "
-            "get a real, grounded answer here.]",
-            stub=True,
-        )
-    gm = genai.GenerativeModel(model, system_instruction=system)
-    resp = gm.generate_content(prompt)
-    usage = getattr(resp, "usage_metadata", None)
-    tin = getattr(usage, "prompt_token_count", 0) or 0
-    tout = getattr(usage, "candidates_token_count", 0) or 0
-    return LLMResult(
-        text=resp.text or "",
-        tokens_in=tin,
-        tokens_out=tout,
-        cost_usd=estimate_cost_usd(model, tin, tout),
-    )
+    """Single-shot completion. Stub result if Gemini is not configured."""
+    return _generate(system, prompt, model or get_settings().model_fast, json_mode=False)
 
 
 def complete_json(system: str, prompt: str, *, model: str | None = None) -> tuple[object, LLMResult]:
     """Completion constrained to JSON. Returns (parsed_or_None, LLMResult)."""
     import json
 
-    settings = get_settings()
-    model = model or settings.model_fast
-    genai = _configured()
-    if genai is None:
-        return None, LLMResult(text="[]", stub=True)
-    gm = genai.GenerativeModel(model, system_instruction=system)
-    resp = gm.generate_content(
-        prompt, generation_config={"response_mime_type": "application/json"}
-    )
-    usage = getattr(resp, "usage_metadata", None)
-    tin = getattr(usage, "prompt_token_count", 0) or 0
-    tout = getattr(usage, "candidates_token_count", 0) or 0
-    result = LLMResult(
-        text=resp.text or "",
-        tokens_in=tin,
-        tokens_out=tout,
-        cost_usd=estimate_cost_usd(model, tin, tout),
-    )
+    res = _generate(system, prompt, model or get_settings().model_fast, json_mode=True)
     try:
-        return json.loads(resp.text), result
+        return json.loads(res.text), res
     except (json.JSONDecodeError, TypeError):
-        return None, result
+        return None, res
 
 
 def embed(texts: list[str], *, task_type: str = "retrieval_document") -> list[list[float]] | None:
-    """Embed a batch of texts with text-embedding-004. None if not configured."""
-    genai = _configured()
-    if genai is None or not texts:
+    """Embed a batch with gemini-embedding-001 at EMBED_DIM dims. None if no key."""
+    key = _key()
+    if not key or not texts:
         return None
-    settings = get_settings()
-    model = f"models/{settings.embedding_model}"
+    model = get_settings().embedding_model
     out: list[list[float]] = []
-    # Gemini embeds one document per call reliably; batch in a simple loop.
-    for t in texts:
-        res = genai.embed_content(model=model, content=t, task_type=task_type)
-        out.append(res["embedding"])
+    # batchEmbedContents in groups to stay within request limits.
+    for i in range(0, len(texts), 100):
+        batch = texts[i : i + 100]
+        body = {
+            "requests": [
+                {
+                    "model": f"models/{model}",
+                    "content": {"parts": [{"text": t}]},
+                    "taskType": task_type.upper(),
+                    "outputDimensionality": EMBED_DIM,
+                }
+                for t in batch
+            ]
+        }
+        r = httpx.post(f"{_BASE}/models/{model}:batchEmbedContents",
+                       params={"key": key}, json=body, timeout=90)
+        r.raise_for_status()
+        out.extend(e["values"] for e in r.json().get("embeddings", []))
     return out
